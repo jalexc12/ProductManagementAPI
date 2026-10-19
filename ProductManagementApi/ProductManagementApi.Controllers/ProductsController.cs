@@ -20,21 +20,21 @@ namespace ProductManagementApi.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<ActionResult<IEnumerable<ProductResponse>>> GetAll()
         {
             var products = await _productService.GetAllAsync();
             return Ok(products);
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateProduct([FromBody] CreateProductRequest request)
+        public async Task<ActionResult<ProductResponse>> CreateProduct([FromBody] CreateProductRequest request)
         {
             var result = await _productService.CreateAsync(request);
             return CreatedAtAction(nameof(GetProductById), new { id = result.Id }, result);
         }
 
         [HttpGet("{id}")]
-        public async Task<IActionResult> GetProductById(int id)
+        public async Task<ActionResult<ProductResponse>> GetProductById(int id)
         {
             var product = await _productService.GetByIdAsync(id);
             if (product == null)
@@ -45,7 +45,7 @@ namespace ProductManagementApi.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductRequest request)
+        public async Task<ActionResult<ProductResponse>> UpdateProduct(int id, [FromBody] UpdateProductRequest request)
         {
             var result = await _productService.UpdateByIdAsync(id, request);
             if (result == null)
@@ -70,7 +70,7 @@ namespace ProductManagementApi.Controllers
 
 
         [HttpPost("{id}/decrement-stock/{quantity}")]
-        public async Task<IActionResult> DecrementStock(int id, int quantity)
+        public async Task<ActionResult<ProductResponse>> DecrementStock(int id, int quantity)
         {
             try
             {
@@ -82,18 +82,24 @@ namespace ProductManagementApi.Controllers
 
                 return Ok(product);
             }
-            catch (ArgumentOutOfRangeException ex)
+            catch (ArgumentOutOfRangeException)
             {
-                return BadRequest(ex.Message);
+                return Problem(
+                    title: "Invalid quantity",
+                    detail: "Quantity must be greater than zero.",
+                    statusCode: StatusCodes.Status400BadRequest);
             }
             catch (InsufficientStockException ex)
             {
-                return Conflict(ex.Message);
+                return Problem(
+                    title: "Insufficient stock",
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status409Conflict);
             }
         }
 
         [HttpPost("{id}/add-to-stock/{quantity}")]
-        public async Task<IActionResult> AddToStock(int id, int quantity)
+        public async Task<ActionResult<ProductResponse>> AddToStock(int id, int quantity)
         {
             try 
             {
@@ -105,25 +111,31 @@ namespace ProductManagementApi.Controllers
 
                 return Ok(product);
             }
-            catch (ArgumentOutOfRangeException ex)
+            catch (ArgumentOutOfRangeException)
             {
-                return BadRequest(ex.Message);
+                return Problem(
+                    title: "Invalid quantity",
+                    detail: "Quantity must be greater than zero.",
+                    statusCode: StatusCodes.Status400BadRequest);
             }
             catch (StockLimitExceededException ex)
             {
-                return Conflict(ex.Message);
+                return Problem(
+                    title: "Stock limit exceeded",
+                    detail: ex.Message,
+                    statusCode: StatusCodes.Status409Conflict);
             }
         }
 
         [HttpGet("search")]
-        public async Task<IActionResult> SearchByName([FromQuery] SearchProductsRequest request)
+        public async Task<ActionResult<IEnumerable<ProductResponse>>> SearchByName([FromQuery] SearchProductsRequest request)
         {
             var products = await _productService.GetByNameAsync(request.Name);
             return Ok(products);
         }
 
         [HttpGet("stock-level")]
-        public async Task<IActionResult> GetStockLevel([FromQuery] StockLevelRequest request)
+        public async Task<ActionResult<IEnumerable<ProductResponse>>> GetStockLevel([FromQuery] StockLevelRequest request)
         {
             var products = await _productService.GetWithStockLevelAsync(request.Min, request.Max);
             return Ok(products);

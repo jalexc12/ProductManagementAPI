@@ -15,7 +15,7 @@ public class ProductService : IProductService
         _dbContext = dbContext;
     }
 
-    public async Task<Product> CreateAsync(CreateProductRequest request)
+    public async Task<ProductResponse> CreateAsync(CreateProductRequest request)
     {
         var product = new Product
         {
@@ -29,28 +29,28 @@ public class ProductService : IProductService
         _dbContext.Products.Add(product);
         await _dbContext.SaveChangesAsync();
 
-        return product;
+        return ToResponse(product);
     }
 
-    public async Task<IEnumerable<Product>> GetAllAsync()
+    public async Task<IEnumerable<ProductResponse>> GetAllAsync()
     {
         var products = await _dbContext.Products.AsNoTracking().OrderBy(p => p.Id).ToListAsync();
-        return products;
+        return products.Select(ToResponse);
     }
 
-    public async Task<Product?> GetByIdAsync(int id)
+    public async Task<ProductResponse?> GetByIdAsync(int id)
     {
         var product = await _dbContext.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
-        return product;
+        return product is null ? null : ToResponse(product);
     }
 
-    public async Task<IEnumerable<Product>> GetByNameAsync(string name)
+    public async Task<IEnumerable<ProductResponse>> GetByNameAsync(string name)
     {
         var products = await _dbContext.Products.AsNoTracking().Where(p => p.Name.Contains(name)).ToListAsync();
-        return products;
+        return products.Select(ToResponse);
     }
 
-    public async Task<IEnumerable<Product>> GetWithStockLevelAsync(int? minStock, int? maxStock)
+    public async Task<IEnumerable<ProductResponse>> GetWithStockLevelAsync(int? minStock, int? maxStock)
     {
         var query = _dbContext.Products.AsNoTracking().AsQueryable();
 
@@ -64,11 +64,12 @@ public class ProductService : IProductService
             query = query.Where(p => p.Stock <= maxStock.Value);
         }
 
-        return await query.ToListAsync();
+        var products = await query.ToListAsync();
+        return products.Select(ToResponse);
     }
 
 
-    public async Task<Product?> UpdateByIdAsync(int id, UpdateProductRequest request)
+    public async Task<ProductResponse?> UpdateByIdAsync(int id, UpdateProductRequest request)
     {
         var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.Id == id);
         if (product == null)
@@ -83,7 +84,7 @@ public class ProductService : IProductService
 
         await _dbContext.SaveChangesAsync();
 
-        return product;
+        return ToResponse(product);
     }
 
     public async Task<Product?> DeleteByIdAsync(int id)
@@ -100,7 +101,7 @@ public class ProductService : IProductService
         return product;
     }
 
-    public async Task<Product?> DecrementStockAsync(int id, int quantity)
+    public async Task<ProductResponse?> DecrementStockAsync(int id, int quantity)
     {
         if (quantity <= 0)
         {
@@ -125,10 +126,10 @@ public class ProductService : IProductService
             throw new InsufficientStockException("Insufficient stock.");
         }
 
-        return product;
+        return ToResponse(product);
     }
 
-    public async Task<Product?> IncrementStockAsync(int id, int quantity)
+    public async Task<ProductResponse?> IncrementStockAsync(int id, int quantity)
     {
         if (quantity <= 0)
         {
@@ -152,6 +153,17 @@ public class ProductService : IProductService
             throw new StockLimitExceededException("Stock cannot exceed the maximum supported value.");
         }
 
-        return product;
+        return ToResponse(product);
     }
+
+    private static ProductResponse ToResponse(Product product) =>
+        new()
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Description = product.Description,
+            Price = product.Price,
+            Stock = product.Stock,
+            CreatedAt = product.CreatedAt
+        };
 }

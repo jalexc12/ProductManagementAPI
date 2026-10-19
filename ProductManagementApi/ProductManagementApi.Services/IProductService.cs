@@ -7,14 +7,14 @@ namespace ProductManagementApi.Services
 {
     public interface IProductService
     {
-        Task<IEnumerable<Product>> GetAllAsync();
-        Task<Product?> GetByIdAsync(int id);
-        Task<IEnumerable<Product>> GetByNameAsync(string name);
-        Task<IEnumerable<Product>> GetWithStockLevelAsync(int? minStock, int? maxStock);
-        Task<Product> CreateAsync(CreateProductRequest request);
-        Task<Product?> UpdateByIdAsync(int id, UpdateProductRequest request);
+        Task<IEnumerable<ProductResponse>> GetAllAsync();
+        Task<ProductResponse?> GetByIdAsync(int id);
+        Task<IEnumerable<ProductResponse>> GetByNameAsync(string name);
+        Task<IEnumerable<ProductResponse>> GetWithStockLevelAsync(int? minStock, int? maxStock);
+        Task<ProductResponse> CreateAsync(CreateProductRequest request);
+        Task<ProductResponse?> UpdateByIdAsync(int id, UpdateProductRequest request);
         Task<Product?> DeleteByIdAsync(int id);
-        Task<Product?> DecrementStockAsync(int id, int quantity);
-        Task<Product?> IncrementStockAsync(int id, int quantity);
+        Task<ProductResponse?> DecrementStockAsync(int id, int quantity);
+        Task<ProductResponse?> IncrementStockAsync(int id, int quantity);
     }
 }
