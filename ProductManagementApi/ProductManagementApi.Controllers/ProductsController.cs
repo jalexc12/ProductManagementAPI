@@ -88,7 +88,7 @@ namespace ProductManagementApi.Controllers
             }
             catch (InsufficientStockException ex)
             {
-                return BadRequest(ex.Message);
+                return Conflict(ex.Message);
             }
         }
 
@@ -108,6 +108,10 @@ namespace ProductManagementApi.Controllers
             catch (ArgumentOutOfRangeException ex)
             {
                 return BadRequest(ex.Message);
+            }
+            catch (StockLimitExceededException ex)
+            {
+                return Conflict(ex.Message);
             }
         }
 

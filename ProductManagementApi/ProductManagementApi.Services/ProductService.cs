@@ -107,20 +107,23 @@ public class ProductService : IProductService
             throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be greater than zero.");
         }
 
-        var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.Id == id);
+        var affected = await _dbContext.Products
+            .Where(p => p.Id == id && p.Stock >= quantity)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Stock, p => p.Stock - quantity));
+
+        var product = await _dbContext.Products
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id);
+
         if (product == null)
         {
             return null;
         }
 
-        if (product.Stock < quantity)
+        if (affected == 0)
         {
             throw new InsufficientStockException("Insufficient stock.");
         }
-
-        product.Stock -= quantity;
-
-        await _dbContext.SaveChangesAsync();
 
         return product;
     }
@@ -131,23 +134,23 @@ public class ProductService : IProductService
         {
             throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be greater than zero.");
         }
+        var affected = await _dbContext.Products
+            .Where(p => p.Id == id && p.Stock <= int.MaxValue - quantity)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Stock, p => p.Stock + quantity));
 
-        var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.Id == id);
+        var product = await _dbContext.Products
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id);
+
         if (product == null)
         {
             return null;
         }
 
-        if (quantity > int.MaxValue - product.Stock)
+        if (affected == 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(quantity),
-                "Stock cannot exceed the maximum supported value.");
+            throw new StockLimitExceededException("Stock cannot exceed the maximum supported value.");
         }
-
-        product.Stock += quantity;
-
-        await _dbContext.SaveChangesAsync();
 
         return product;
     }
