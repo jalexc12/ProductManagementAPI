@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using ProductManagementApi.Data;
 using ProductManagementApi.DTO;
 using ProductManagementApi.Exceptions;
@@ -154,7 +155,8 @@ public class ProductServiceTests
     [Fact]
     public async Task DecrementStockAsync_DecrementsStock()
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         context.Products.Add(NewProduct(100, "Camera", stock: 5));
         await context.SaveChangesAsync();
         var service = new ProductService(context);
@@ -162,7 +164,10 @@ public class ProductServiceTests
         var updated = await service.DecrementStockAsync(100, 2);
 
         Assert.Equal(3, updated?.Stock);
-        Assert.Equal(3, (await context.Products.SingleAsync()).Stock);
+        Assert.Equal(3, await context.Products
+            .AsNoTracking()
+            .Select(p => p.Stock)
+            .SingleAsync());
     }
 
     [Theory]
@@ -170,7 +175,8 @@ public class ProductServiceTests
     [InlineData(-1)]
     public async Task DecrementStockAsync_RejectsNonPositiveQuantity(int quantity)
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         var service = new ProductService(context);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
@@ -180,29 +186,58 @@ public class ProductServiceTests
     [Fact]
     public async Task DecrementStockAsync_RejectsInsufficientStock()
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         context.Products.Add(NewProduct(100, "Camera", stock: 2));
         await context.SaveChangesAsync();
         var service = new ProductService(context);
 
         await Assert.ThrowsAsync<InsufficientStockException>(
             () => service.DecrementStockAsync(100, 3));
-        Assert.Equal(2, (await context.Products.SingleAsync()).Stock);
+        Assert.Equal(2, await context.Products
+            .AsNoTracking()
+            .Select(p => p.Stock)
+            .SingleAsync());
     }
 
     [Fact]
     public async Task DecrementStockAsync_ReturnsNullWhenProductDoesNotExist()
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         var service = new ProductService(context);
 
         Assert.Null(await service.DecrementStockAsync(999, 1));
     }
 
     [Fact]
+    public async Task DecrementStockAsync_RepeatedRequestsDoNotOversell()
+    {
+        await using var database1 = await CreateSqliteContextAsync();
+        await using var database2 = await CreateSqliteContextAsync(database1.Connection);
+        database1.Context.Products.Add(NewProduct(100, "Camera", stock: 5));
+        await database1.Context.SaveChangesAsync();
+
+        var service1 = new ProductService(database1.Context);
+        var service2 = new ProductService(database2.Context);
+
+        var first = await service1.DecrementStockAsync(100, 3);
+        await Assert.ThrowsAsync<InsufficientStockException>(
+            () => service2.DecrementStockAsync(100, 3));
+
+        Assert.Equal(2, first?.Stock);
+        Assert.Equal(2, await database1.Context.Products
+            .AsNoTracking()
+            .Where(p => p.Id == 100)
+            .Select(p => p.Stock)
+            .SingleAsync());
+    }
+
+    [Fact]
     public async Task IncrementStockAsync_IncrementsStock()
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         context.Products.Add(NewProduct(100, "Camera", stock: 5));
         await context.SaveChangesAsync();
         var service = new ProductService(context);
@@ -210,7 +245,10 @@ public class ProductServiceTests
         var updated = await service.IncrementStockAsync(100, 2);
 
         Assert.Equal(7, updated?.Stock);
-        Assert.Equal(7, (await context.Products.SingleAsync()).Stock);
+        Assert.Equal(7, await context.Products
+            .AsNoTracking()
+            .Select(p => p.Stock)
+            .SingleAsync());
     }
 
     [Theory]
@@ -218,7 +256,8 @@ public class ProductServiceTests
     [InlineData(-1)]
     public async Task IncrementStockAsync_RejectsNonPositiveQuantity(int quantity)
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         var service = new ProductService(context);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
@@ -228,19 +267,21 @@ public class ProductServiceTests
     [Fact]
     public async Task IncrementStockAsync_RejectsIntegerOverflow()
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         context.Products.Add(NewProduct(100, "Camera", stock: int.MaxValue));
         await context.SaveChangesAsync();
         var service = new ProductService(context);
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+        await Assert.ThrowsAsync<StockLimitExceededException>(
             () => service.IncrementStockAsync(100, 1));
     }
 
     [Fact]
     public async Task IncrementStockAsync_ReturnsNullWhenProductDoesNotExist()
     {
-        await using var context = CreateContext();
+        await using var database = await CreateSqliteContextAsync();
+        var context = database.Context;
         var service = new ProductService(context);
 
         Assert.Null(await service.IncrementStockAsync(999, 1));
@@ -253,6 +294,57 @@ public class ProductServiceTests
             .Options;
 
         return new ApplicationDbContext(options);
+    }
+
+    private static async Task<SqliteTestDatabase> CreateSqliteContextAsync(
+        SqliteConnection? connection = null)
+    {
+        var ownsConnection = connection is null;
+        connection ??= new SqliteConnection("Data Source=:memory:");
+        if (ownsConnection)
+        {
+            await connection.OpenAsync();
+        }
+
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        var context = new ApplicationDbContext(options);
+        if (ownsConnection)
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                """
+                CREATE TABLE Products (
+                    Id INTEGER NOT NULL PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Description TEXT NOT NULL,
+                    Price TEXT NOT NULL,
+                    Stock INTEGER NOT NULL,
+                    CreatedAt TEXT NOT NULL
+                )
+                """);
+        }
+
+        return new SqliteTestDatabase(context, connection, ownsConnection);
+    }
+
+    private sealed class SqliteTestDatabase(
+        ApplicationDbContext context,
+        SqliteConnection connection,
+        bool ownsConnection) : IAsyncDisposable
+    {
+        public ApplicationDbContext Context { get; } = context;
+
+        public SqliteConnection Connection { get; } = connection;
+
+        public async ValueTask DisposeAsync()
+        {
+            await Context.DisposeAsync();
+            if (ownsConnection)
+            {
+                await Connection.DisposeAsync();
+            }
+        }
     }
 
     private static Product NewProduct(int id, string name, int stock = 0)
