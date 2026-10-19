@@ -18,6 +18,8 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.HasSequence<int>("ProductIdSequence")
             .StartsAt(100000)
+            .HasMax(999999)
+            .IsCyclic(false)
             .IncrementsBy(1);
 
         modelBuilder.ApplyConfigurationsFromAssembly(

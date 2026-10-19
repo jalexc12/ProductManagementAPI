@@ -33,6 +33,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.ToTable(t =>
         {
             t.HasCheckConstraint("CK_Product_Stock", "[Stock] >= 0");
+            t.HasCheckConstraint("CK_Product_Id_Range", "[Id] BETWEEN 100000 AND 999999");
         });   
 
         builder.Property(p => p.CreatedAt)

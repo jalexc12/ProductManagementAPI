@@ -23,7 +23,8 @@ namespace ProductManagementApi.Migrations
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.HasSequence<int>("ProductIdSequence")
-                .StartsAt(100000L);
+                .StartsAt(100000L)
+                .HasMax(999999L);
 
             modelBuilder.Entity("ProductManagementApi.Models.Product", b =>
                 {
@@ -55,6 +56,8 @@ namespace ProductManagementApi.Migrations
 
                     b.ToTable("Products", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Product_Id_Range", "[Id] BETWEEN 100000 AND 999999");
+
                             t.HasCheckConstraint("CK_Product_Stock", "[Stock] >= 0");
                         });
                 });
