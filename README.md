@@ -7,6 +7,7 @@ SQL Server database and follows a code-first migration workflow.
 
 - .NET 10 SDK
 - SQL Server Express Database Engine (or another reachable SQL Server instance)
+- Docker Desktop or another Docker-compatible container runtime (for SQL Server integration tests)
 - EF Core command-line tool (`dotnet-ef`) version 10.0.12
 
 SQL Server Management Studio (SSMS) is optional; it is a database management application and does
@@ -139,6 +140,23 @@ POST /api/products/100000/add-to-stock/5
 
 FluentValidation validates request DTOs automatically for create, update, search, and stock-level
 queries. Stock-operation business rules are checked by the product service.
+
+## Run SQL Server integration tests
+
+The integration test project starts a SQL Server container with Testcontainers, applies the
+application migrations, and exercises the HTTP API. It verifies generated product IDs, database
+check constraints, and concurrent stock decrements.
+
+Run it from the repository root with Docker available:
+
+```powershell
+$env:RUN_SQLSERVER_INTEGRATION_TESTS = "1"
+dotnet test .\ProductManagementApi.IntegrationTests\ProductManagementApi.IntegrationTests.csproj
+```
+
+These tests are opt-in and are reported as skipped unless `RUN_SQLSERVER_INTEGRATION_TESTS=1`.
+The regular `ProductManagementApi.Tests` project remains a fast unit-test suite and does not
+require Docker.
 
 ## Product IDs and database
 
