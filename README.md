@@ -132,7 +132,9 @@ POST /api/products/100000/add-to-stock/5
   exceed `max`. The bounds are inclusive.
 - Stock adjustment requires a positive quantity. Decrementing more than available stock is
   rejected; stock cannot become negative. Invalid quantities, insufficient stock, and an
-  increment that would exceed the supported integer range return `400 Bad Request`.
+  increment that would exceed the supported integer range are rejected. Invalid quantities
+  return `400 Bad Request`; insufficient stock and increments that exceed the supported integer
+  range return `409 Conflict`.
 - Requests for product IDs that do not exist return `404 Not Found` where applicable.
 
 FluentValidation validates request DTOs automatically for create, update, search, and stock-level
